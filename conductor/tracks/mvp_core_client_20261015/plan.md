@@ -2,7 +2,7 @@
 
 ## Phase 1: Core Foundation & Subprocess IPC Engine
 
-- [~] Task: Project Scaffolding & Dependencies Setup
+- [x] Task: Project Scaffolding & Dependencies Setup [7dcd1b5]
   - [ ] Add GPUI (Zed git repo), tokio, serde, serde_json, rusqlite, notify-rust to Cargo.toml
   - [ ] Configure linting and clippy settings
   - [ ] Verify cargo check and cargo test build cleanly
@@ -74,4 +74,5 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
