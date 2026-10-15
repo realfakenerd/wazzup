@@ -18,7 +18,7 @@
 
 ## Phase 2: Local SQLite Cache & Persistence Layer
 
-- [ ] Task: Database Schema & Migration Setup (TDD)
+- [~] Task: Database Schema & Migration Setup (TDD)
   - [ ] Write unit tests for database schema initialization and table creation (Red)
   - [ ] Implement rusqlite schema creation for chats, messages, and contacts (Green)
 - [ ] Task: Message & Chat Repository (TDD)
@@ -74,6 +74,7 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
 
 
