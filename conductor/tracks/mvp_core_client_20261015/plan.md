@@ -16,7 +16,7 @@
   - [ ] Implement command dispatching to wacli (send text, query status) (Green)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [79c9272]
 
-## Phase 2: Local SQLite Cache & Persistence Layer
+## Phase 2: Local SQLite Cache & Persistence Layer [checkpoint: fdc7667]
 
 - [x] Task: Database Schema & Migration Setup (TDD) [64dbdb6]
   - [ ] Write unit tests for database schema initialization and table creation (Red)
@@ -26,7 +26,7 @@
   - [ ] Implement ChatRepository and MessageRepository with transactional updates (Green)
   - [ ] Write unit tests for full-text search across local message cache (Red)
   - [ ] Implement SQLite FTS / LIKE search querying (Green)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [fdc7667]
 
 ## Phase 3: GPUI Application Shell & State Models
 
@@ -74,6 +74,7 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
 
 
