@@ -6,7 +6,7 @@
   - [ ] Add GPUI (Zed git repo), tokio, serde, serde_json, rusqlite, notify-rust to Cargo.toml
   - [ ] Configure linting and clippy settings
   - [ ] Verify cargo check and cargo test build cleanly
-- [~] Task: wacli IPC Protocol Models (TDD)
+- [x] Task: wacli IPC Protocol Models (TDD) [c711db4]
   - [ ] Write unit tests for wacli JSON-RPC event message deserialization (Red)
   - [ ] Implement event data types (ChatEvent, MessageEvent, StatusEvent) with Serde (Green)
   - [ ] Refactor serialization schemas for zero-copy parsing where applicable
@@ -74,6 +74,7 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
 
 
