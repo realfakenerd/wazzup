@@ -10,7 +10,7 @@
   - [ ] Write unit tests for wacli JSON-RPC event message deserialization (Red)
   - [ ] Implement event data types (ChatEvent, MessageEvent, StatusEvent) with Serde (Green)
   - [ ] Refactor serialization schemas for zero-copy parsing where applicable
-- [ ] Task: Subprocess Daemon Supervisor (TDD)
+- [~] Task: Subprocess Daemon Supervisor (TDD)
   - [ ] Write unit tests for daemon process spawn, heartbeat, and exit handling with mock process (Red)
   - [ ] Implement Tokio async subprocess runner streaming stdout lines into broadcast channels (Green)
   - [ ] Implement command dispatching to wacli (send text, query status) (Green)
@@ -74,6 +74,7 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
 
 
