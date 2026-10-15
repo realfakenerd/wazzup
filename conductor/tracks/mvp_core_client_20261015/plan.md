@@ -30,7 +30,7 @@
 
 ## Phase 3: GPUI Application Shell & State Models
 
-- [ ] Task: GPUI Window & Theme Initialization
+- [~] Task: GPUI Window & Theme Initialization
   - [ ] Scaffolding GPUI App entrypoint with Omarchy/Zed Dark palette tokens
   - [ ] Configure Wayland window options and titlebar
 - [ ] Task: App State & Reactive Store (TDD)
@@ -74,6 +74,7 @@
   - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
   - [ ] Add settings toggle for optional Vim modal navigation
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
 
 
 
