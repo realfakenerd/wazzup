@@ -349,4 +349,26 @@ mod tests {
         let action = state.handle_key("ArrowDown", false, false, &chats);
         assert_eq!(action, ChatListAction::ChatSelected("bob@s.whatsapp.net".into()));
     }
+
+    #[core::prelude::v1::test]
+    fn test_chat_list_empty_chats_navigation() {
+        let mut state = ChatListState::new();
+        assert_eq!(state.navigate(&[], 1), None);
+        assert_eq!(state.navigate(&[], -1), None);
+    }
+
+    #[core::prelude::v1::test]
+    fn test_chat_list_escape_clears_search() {
+        let chats = create_test_chats();
+        let mut state = ChatListState::new();
+        state.set_search_query("alice");
+
+        let action = state.handle_key("Escape", false, false, &chats);
+        assert_eq!(action, ChatListAction::SearchCleared);
+        assert_eq!(state.search_query, "");
+        assert!(!state.is_searching);
+
+        let action_empty = state.handle_key("Escape", false, false, &chats);
+        assert_eq!(action_empty, ChatListAction::None);
+    }
 }

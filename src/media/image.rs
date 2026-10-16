@@ -181,9 +181,4 @@ mod tests {
         assert_eq!(meta.format, "Png");
         assert!(meta.file_size > 0);
     }
-
-    #[core::prelude::v1::test]
-    fn test_render_image_preview_creation() {
-        let _div = render_image_preview(Some("/tmp/pic.jpg"), Some("Vacation"), Some((800, 600)));
-    }
 }

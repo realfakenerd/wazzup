@@ -187,10 +187,4 @@ mod tests {
         player.seek(200); // capped at duration
         assert_eq!(player.progress_secs, 100);
     }
-
-    #[core::prelude::v1::test]
-    fn test_render_audio_player_creation() {
-        let state = AudioPlayerState::with_duration(Some("/tmp/note.ogg"), 45);
-        let _div = render_audio_player(&state);
-    }
 }

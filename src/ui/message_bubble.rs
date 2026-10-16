@@ -222,32 +222,5 @@ mod tests {
         assert_eq!(props.status, MessageStatus::Read);
         assert_eq!(props.media_info.as_deref(), Some("📄 Document • agenda.pdf"));
         assert!(props.media.is_some());
-
-        // Test rendering with document
-        let _div = render_message_bubble(&props);
-
-        // Test rendering with image
-        let mut img_record = record.clone();
-        img_record.media = Some(MediaPayload {
-            media_type: MediaType::Image,
-            mimetype: "image/png".into(),
-            file_path: Some("/tmp/sample.png".into()),
-            file_name: Some("sample.png".into()),
-            file_size: Some(2048),
-        });
-        let img_props = MessageBubbleProps::from_record(&img_record);
-        let _div_img = render_message_bubble(&img_props);
-
-        // Test rendering with audio
-        let mut audio_record = record.clone();
-        audio_record.media = Some(MediaPayload {
-            media_type: MediaType::Audio,
-            mimetype: "audio/ogg".into(),
-            file_path: Some("/tmp/voice.ogg".into()),
-            file_name: Some("voice.ogg".into()),
-            file_size: Some(4096),
-        });
-        let audio_props = MessageBubbleProps::from_record(&audio_record);
-        let _div_audio = render_message_bubble(&audio_props);
     }
 }

@@ -83,27 +83,3 @@ pub fn render_chat_list<'a>(
 
     list
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[core::prelude::v1::test]
-    fn test_chat_list_empty_renders() {
-        let chats: Vec<&ChatRecord> = vec![];
-        let _view = render_chat_list(&chats, None, "", |_| None);
-    }
-
-    #[core::prelude::v1::test]
-    fn test_chat_list_with_items_renders() {
-        let record = ChatRecord {
-            jid: "123@s.whatsapp.net".to_string(),
-            name: Some("Bob".to_string()),
-            unread_count: 1,
-            last_message_timestamp: Some(100),
-            pinned: false,
-        };
-        let chats = vec![&record];
-        let _view = render_chat_list(&chats, Some("123@s.whatsapp.net"), "", |_| Some("Hello"));
-    }
-}

@@ -323,4 +323,109 @@ mod tests {
         assert_eq!(state.chats[0].unread_count, 0);
         assert_eq!(state.store.get_chat("charlie@s.whatsapp.net").unwrap().unread_count, 0);
     }
+
+    #[test]
+    fn test_chat_ordering_pinned_first_then_timestamp() {
+        let mut state = AppState::new();
+
+        let chat_old_pinned = ChatRecord {
+            jid: "c1@s.whatsapp.net".into(),
+            name: Some("Old Pinned".into()),
+            unread_count: 0,
+            last_message_timestamp: Some(100),
+            pinned: true,
+        };
+        let chat_new_unpinned = ChatRecord {
+            jid: "c2@s.whatsapp.net".into(),
+            name: Some("New Unpinned".into()),
+            unread_count: 0,
+            last_message_timestamp: Some(500),
+            pinned: false,
+        };
+        let chat_new_pinned = ChatRecord {
+            jid: "c3@s.whatsapp.net".into(),
+            name: Some("New Pinned".into()),
+            unread_count: 0,
+            last_message_timestamp: Some(400),
+            pinned: true,
+        };
+
+        state.apply_chat_event(&ChatEvent {
+            jid: chat_old_pinned.jid.clone(),
+            name: chat_old_pinned.name.clone(),
+            unread_count: 0,
+            last_message_timestamp: chat_old_pinned.last_message_timestamp,
+            pinned: true,
+        });
+        state.apply_chat_event(&ChatEvent {
+            jid: chat_new_unpinned.jid.clone(),
+            name: chat_new_unpinned.name.clone(),
+            unread_count: 0,
+            last_message_timestamp: chat_new_unpinned.last_message_timestamp,
+            pinned: false,
+        });
+        state.apply_chat_event(&ChatEvent {
+            jid: chat_new_pinned.jid.clone(),
+            name: chat_new_pinned.name.clone(),
+            unread_count: 0,
+            last_message_timestamp: chat_new_pinned.last_message_timestamp,
+            pinned: true,
+        });
+
+        // Expected order:
+        // 1. c3 (pinned, ts: 400)
+        // 2. c1 (pinned, ts: 100)
+        // 3. c2 (unpinned, ts: 500)
+        assert_eq!(state.chats[0].jid, "c3@s.whatsapp.net");
+        assert_eq!(state.chats[1].jid, "c1@s.whatsapp.net");
+        assert_eq!(state.chats[2].jid, "c2@s.whatsapp.net");
+    }
+
+    #[test]
+    fn test_unread_count_rules() {
+        let mut state = AppState::new();
+
+        // 1. Incoming msg on inactive chat -> unread +1
+        state.apply_message_event(&MessageEvent {
+            id: "m1".into(),
+            chat_jid: "chat@s.whatsapp.net".into(),
+            sender_jid: "chat@s.whatsapp.net".into(),
+            timestamp: 100,
+            from_me: false,
+            body: "msg 1".into(),
+            status: MessageStatus::Delivered,
+            media: None,
+        });
+        assert_eq!(state.chats[0].unread_count, 1);
+
+        // 2. Outgoing msg -> unread unchanged
+        state.apply_message_event(&MessageEvent {
+            id: "m2".into(),
+            chat_jid: "chat@s.whatsapp.net".into(),
+            sender_jid: "me@s.whatsapp.net".into(),
+            timestamp: 101,
+            from_me: true,
+            body: "my reply".into(),
+            status: MessageStatus::Sent,
+            media: None,
+        });
+        assert_eq!(state.chats[0].unread_count, 1);
+
+        // 3. Select chat -> unread cleared to 0
+        state.select_chat(Some("chat@s.whatsapp.net".into()));
+        assert_eq!(state.chats[0].unread_count, 0);
+
+        // 4. Incoming msg while chat is active -> unread stays 0
+        state.apply_message_event(&MessageEvent {
+            id: "m3".into(),
+            chat_jid: "chat@s.whatsapp.net".into(),
+            sender_jid: "chat@s.whatsapp.net".into(),
+            timestamp: 102,
+            from_me: false,
+            body: "msg 3 while looking".into(),
+            status: MessageStatus::Read,
+            media: None,
+        });
+        assert_eq!(state.chats[0].unread_count, 0);
+    }
 }

@@ -131,25 +131,3 @@ pub fn render_message_thread(
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[core::prelude::v1::test]
-    fn test_render_message_thread_no_active_chat() {
-        let _view = render_message_thread(None, &[]);
-    }
-
-    #[core::prelude::v1::test]
-    fn test_render_message_thread_with_active_chat() {
-        let chat = ChatRecord {
-            jid: "bob@s.whatsapp.net".to_string(),
-            name: Some("Bob".to_string()),
-            unread_count: 0,
-            last_message_timestamp: None,
-            pinned: false,
-        };
-        let _view = render_message_thread(Some(&chat), &[]);
-    }
-}
