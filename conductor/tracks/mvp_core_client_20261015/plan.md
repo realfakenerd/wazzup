@@ -40,17 +40,17 @@
 
 ## Phase 4: Chat List & Message Thread Views
 
-- [ ] Task: Chat List Sidebar Component
-  - [ ] Implement ChatItemView with unread badge, last message preview, and timestamp
-  - [ ] Implement virtualized ChatListView with keyboard selection
-- [ ] Task: Message Thread & Chat Bubble Components
-  - [ ] Implement MessageBubbleView distinguishing incoming vs outgoing messages
-  - [ ] Add WhatsApp delivery tick indicators (single, double gray, double cyan)
-  - [ ] Implement auto-scroll to bottom on new incoming message
-- [ ] Task: Message Composer Component
-  - [ ] Implement text input area with Enter-to-send and Shift+Enter newline
-  - [ ] Connect send action to wacli daemon IPC and local database update
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Chat List Sidebar Component
+  - [x] Implement ChatItemView with unread badge, last message preview, and timestamp
+  - [x] Implement virtualized ChatListView with keyboard selection
+- [x] Task: Message Thread & Chat Bubble Components
+  - [x] Implement MessageBubbleView distinguishing incoming vs outgoing messages
+  - [x] Add WhatsApp delivery tick indicators (single, double gray, double cyan)
+  - [x] Implement auto-scroll to bottom on new incoming message
+- [x] Task: Message Composer Component
+  - [x] Implement text input area with Enter-to-send and Shift+Enter newline
+  - [x] Connect send action to wacli daemon IPC and local database update
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 5: Rich Media Support & Audio Playback
 

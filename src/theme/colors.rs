@@ -8,6 +8,8 @@ impl ThemeColors {
     pub const MANTLE: u32 = 0x1e1e2e;
     pub const CRUST: u32 = 0x11111b;
     pub const SURFACE: u32 = 0x313244;
+    pub const SURFACE0: u32 = 0x313244;
+    pub const SURFACE1: u32 = 0x45475a;
     pub const OVERLAY: u32 = 0x45475a;
 
     // WhatsApp Emerald green accents
