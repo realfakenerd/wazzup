@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use gpui::{div, px, rgb, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window};
+use gpui::{div, px, rgb, Context, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Window};
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
 use crate::ipc::protocol::ConnectionState;
 use crate::ipc::client::WhatsAppClient;
 use crate::state::AppState;
 use crate::theme::ThemeColors;
-use crate::ui::chat_item::{render_chat_item, ChatItemProps};
+use crate::ui::chat_list_controller::{ChatListAction, ChatListController};
 use crate::ui::composer::{render_composer, ComposerState};
 use crate::ui::message_thread::render_message_thread;
 
@@ -15,6 +15,7 @@ pub struct MainWindow {
     pub composer: ComposerState,
     pub desktop: DesktopSettings,
     pub client: Option<Arc<dyn WhatsAppClient>>,
+    pub chat_list: ChatListController,
 }
 
 impl MainWindow {
@@ -25,6 +26,7 @@ impl MainWindow {
             composer: ComposerState::new(),
             desktop: DesktopSettings::new(),
             client: None,
+            chat_list: ChatListController::new(),
         }
     }
 
@@ -35,6 +37,7 @@ impl MainWindow {
             composer: ComposerState::new(),
             desktop: DesktopSettings::new(),
             client: None,
+            chat_list: ChatListController::new(),
         }
     }
 
@@ -45,11 +48,13 @@ impl MainWindow {
             composer: ComposerState::new(),
             desktop: DesktopSettings::new(),
             client: Some(client),
+            chat_list: ChatListController::new(),
         }
     }
 
     pub fn select_chat(&mut self, jid: &str) {
         self.state.select_chat(Some(jid.to_string()));
+        self.chat_list.state.active_chat_jid = Some(jid.to_string());
     }
 
     pub fn select_chat_async(&mut self, jid: &str, cx: &mut Context<Self>) {
@@ -70,51 +75,13 @@ impl MainWindow {
     }
 
     pub fn navigate_chat(&mut self, delta: i32) {
-        let filtered = self.state.filtered_chats();
-        if filtered.is_empty() {
-            return;
-        }
-
-        let current_idx = self
-            .state
-            .active_chat_jid
-            .as_deref()
-            .and_then(|jid| filtered.iter().position(|c| c.jid == jid))
-            .unwrap_or(0);
-
-        let new_idx = if delta > 0 {
-            (current_idx + delta as usize).min(filtered.len() - 1)
-        } else {
-            current_idx.saturating_sub((-delta) as usize)
-        };
-
-        if let Some(target_chat) = filtered.get(new_idx) {
-            let jid = target_chat.jid.clone();
+        if let Some(jid) = self.chat_list.state.navigate(&self.state.chats, delta) {
             self.select_chat(&jid);
         }
     }
 
     pub fn navigate_chat_async(&mut self, delta: i32, cx: &mut Context<Self>) {
-        let filtered = self.state.filtered_chats();
-        if filtered.is_empty() {
-            return;
-        }
-
-        let current_idx = self
-            .state
-            .active_chat_jid
-            .as_deref()
-            .and_then(|jid| filtered.iter().position(|c| c.jid == jid))
-            .unwrap_or(0);
-
-        let new_idx = if delta > 0 {
-            (current_idx + delta as usize).min(filtered.len() - 1)
-        } else {
-            current_idx.saturating_sub((-delta) as usize)
-        };
-
-        if let Some(target_chat) = filtered.get(new_idx) {
-            let jid = target_chat.jid.clone();
+        if let Some(jid) = self.chat_list.state.navigate(&self.state.chats, delta) {
             self.select_chat_async(&jid, cx);
         }
     }
@@ -130,10 +97,12 @@ impl MainWindow {
             match action {
                 ShortcutAction::QuickSearch => {
                     self.state.is_searching = true;
+                    self.chat_list.state.is_searching = true;
                 }
                 ShortcutAction::Escape => {
                     self.state.search_query.clear();
                     self.state.is_searching = false;
+                    self.chat_list.state.clear_search();
                 }
                 ShortcutAction::VimNextChat => {
                     self.navigate_chat_async(1, cx);
@@ -147,38 +116,22 @@ impl MainWindow {
             return;
         }
 
-        if key == "Escape" || key == "esc" {
-            self.state.search_query.clear();
-            self.state.is_searching = false;
-            cx.notify();
-            return;
-        }
-
-        if key == "Backspace" {
-            if !self.state.search_query.is_empty() {
-                self.state.search_query.pop();
+        // Delegate chat list key interactions (arrows, escape, backspace, search typing)
+        match self.chat_list.state.handle_key(key, ctrl, alt, &self.state.chats) {
+            ChatListAction::ChatSelected(jid) => {
+                self.select_chat_async(&jid, cx);
                 cx.notify();
             }
-            return;
-        }
-
-        if key == "ArrowDown" || key == "down" {
-            self.navigate_chat_async(1, cx);
-            cx.notify();
-            return;
-        }
-
-        if key == "ArrowUp" || key == "up" {
-            self.navigate_chat_async(-1, cx);
-            cx.notify();
-            return;
-        }
-
-        // Search text entry: single printable character without Ctrl/Alt
-        if !ctrl && !alt && key.chars().count() == 1 {
-            self.state.search_query.push_str(key);
-            self.state.is_searching = true;
-            cx.notify();
+            ChatListAction::SearchChanged(query) => {
+                self.state.set_search_query(&query);
+                cx.notify();
+            }
+            ChatListAction::SearchCleared => {
+                self.state.search_query.clear();
+                self.state.is_searching = false;
+                cx.notify();
+            }
+            ChatListAction::None => {}
         }
     }
 
@@ -315,106 +268,31 @@ impl Render for MainWindow {
                     .flex()
                     .w_full()
                     .overflow_hidden()
-                    // Left Column: Interactive Chat List Sidebar
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .w_80()
-                            .h_full()
-                            .bg(ThemeColors::base())
-                            .border_r_1()
-                            .border_color(rgb(ThemeColors::BORDER))
-                            // Search Header
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .h_12()
-                                    .px_3()
-                                    .bg(ThemeColors::mantle())
-                                    .border_b_1()
-                                    .border_color(rgb(ThemeColors::BORDER))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .w_full()
-                                            .h_8()
-                                            .px_3()
-                                            .rounded_md()
-                                            .bg(rgb(ThemeColors::SURFACE0))
-                                            .cursor_pointer()
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .text_color(if self.state.search_query.is_empty() {
-                                                        ThemeColors::text_muted()
-                                                    } else {
-                                                        ThemeColors::text_primary()
-                                                    })
-                                                    .child(if self.state.search_query.is_empty() {
-                                                        "Search chats (type or Ctrl+K)...".to_string()
-                                                    } else {
-                                                        self.state.search_query.clone()
-                                                    }),
-                                            )
-                                            .child(if !self.state.search_query.is_empty() {
-                                                div()
-                                                    .cursor_pointer()
-                                                    .text_size(px(12.0))
-                                                    .text_color(ThemeColors::text_muted())
-                                                    .child("✕")
-                                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| {
-                                                        this.state.search_query.clear();
-                                                        this.state.is_searching = false;
-                                                        cx.notify();
-                                                    }))
-                                            } else {
-                                                div()
-                                            }),
-                                    ),
-                            )
-                            // Scroll Area with clickable Chat items
-                            .child({
-                                let mut scroll = div().flex_1().flex().flex_col().overflow_hidden();
-                                if filtered_chats.is_empty() {
-                                    scroll = scroll.child(
-                                        div()
-                                            .flex_1()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .text_size(px(13.0))
-                                            .text_color(ThemeColors::text_muted())
-                                            .child("No matching chats"),
-                                    );
-                                } else {
-                                    for chat in &filtered_chats {
-                                        let chat_jid = chat.jid.clone();
-                                        let is_selected = active_jid.map(|j| j == chat.jid).unwrap_or(false);
-                                        let snippet = if self.desktop.privacy_mode {
-                                            Some("••••••••••••")
-                                        } else {
-                                            self.state
-                                                .messages_by_chat
-                                                .get(&chat.jid)
-                                                .and_then(|msgs| msgs.last())
-                                                .map(|m| m.body.as_str())
-                                        };
-                                        let props = ChatItemProps::from_record(chat, snippet, is_selected);
-                                        let item = render_chat_item(&props)
-                                            .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
-                                                this.select_chat_async(&chat_jid, cx);
-                                                cx.notify();
-                                            }));
-                                        scroll = scroll.child(item);
-                                    }
-                                }
-                                scroll
-                            }),
-                    )
+                    // Left Column: Interactive Chat List Sidebar (Delegated to ChatListController)
+                    .child(self.chat_list.render_sidebar(
+                        &filtered_chats,
+                        active_jid,
+                        self.desktop.privacy_mode,
+                        |jid| {
+                            self.state
+                                .messages_by_chat
+                                .get(jid)
+                                .and_then(|msgs| msgs.last())
+                                .map(|m| m.body.as_str())
+                        },
+                        cx,
+                        |this, jid, cx| {
+                            this.chat_list.state.active_chat_jid = Some(jid.to_string());
+                            this.select_chat_async(jid, cx);
+                            cx.notify();
+                        },
+                        |this, cx| {
+                            this.chat_list.state.clear_search();
+                            this.state.search_query.clear();
+                            this.state.is_searching = false;
+                            cx.notify();
+                        },
+                    ))
                     // Right Column: Message Thread & Composer
                     .child(
                         div()

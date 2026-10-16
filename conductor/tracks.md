@@ -13,5 +13,5 @@
   *Link: [./tracks/improve_sqlite_chat_store_20261016/index.md](./tracks/improve_sqlite_chat_store_20261016/index.md)*
 
 ---
-- [ ] **Track: Extract Focused ChatListController Component**
+- [x] **Track: Extract Focused ChatListController Component**
   *Link: [./tracks/improve_chat_list_controller_20261016/index.md](./tracks/improve_chat_list_controller_20261016/index.md)*

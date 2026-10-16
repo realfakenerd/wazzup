@@ -7,21 +7,21 @@
 
 ## Phase 1: Controller State & Navigation Logic (TDD)
 
-- [ ] Task: Define ChatListState and Selection Operations
-  - [ ] Write unit tests for list navigation indices, filter matching, and bounds safety (Red)
-  - [ ] Implement `ChatListState` with selection and search query management (Green)
-- [ ] Task: Phase Verification & Checkpoint
+- [x] Task: Define ChatListState and Selection Operations
+  - [x] Write unit tests for list navigation indices, filter matching, and bounds safety (Red)
+  - [x] Implement `ChatListState` with selection and search query management (Green)
+- [x] Task: Phase Verification & Checkpoint
 
 ## Phase 2: GPUI Entity & Focus Integration (TDD)
 
-- [ ] Task: Implement ChatListController with FocusHandle
-  - [ ] Write unit tests for key action dispatch and selection event emission (Red)
-  - [ ] Implement GPUI `Render` for `ChatListController` with `FocusHandle` (Green)
-- [ ] Task: Phase Verification & Checkpoint
+- [x] Task: Implement ChatListController with FocusHandle
+  - [x] Write unit tests for key action dispatch and selection event emission (Red)
+  - [x] Implement GPUI `Render` for `ChatListController` with `FocusHandle` (Green)
+- [x] Task: Phase Verification & Checkpoint
 
 ## Phase 3: MainWindow Refactor & Verification
 
-- [ ] Task: Replace Inlined Sidebar in MainWindow
-  - [ ] Mount `ChatListController` inside `MainWindow`
-  - [ ] Subscribe to `ChatSelected` events in `MainWindow`
-- [ ] Task: Phase Verification & Checkpoint
+- [x] Task: Replace Inlined Sidebar in MainWindow
+  - [x] Mount `ChatListController` inside `MainWindow`
+  - [x] Subscribe to `ChatSelected` events in `MainWindow`
+- [x] Task: Phase Verification & Checkpoint
