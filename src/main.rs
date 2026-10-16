@@ -26,7 +26,15 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            move |_, cx| cx.new(|_| MainWindow::with_client(app_state, app_client)),
+            move |window, cx| {
+                let focus_handle = cx.focus_handle();
+                focus_handle.focus(window);
+                cx.new(|_| {
+                    let mut mw = MainWindow::with_client(app_state, app_client);
+                    mw.focus_handle = Some(focus_handle);
+                    mw
+                })
+            },
         )
         .expect("failed to open window");
 

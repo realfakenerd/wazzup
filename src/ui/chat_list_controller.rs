@@ -1,4 +1,7 @@
-use gpui::{div, px, rgb, Context, Div, FocusHandle, InteractiveElement, MouseButton, ParentElement, Styled};
+use gpui::{
+    div, px, rgb, Context, Div, FocusHandle, InteractiveElement, MouseButton, ParentElement,
+    StatefulInteractiveElement, Styled,
+};
 use crate::db::repository::ChatRecord;
 use crate::theme::ThemeColors;
 use crate::ui::chat_item::{render_chat_item, ChatItemProps};
@@ -235,7 +238,7 @@ impl ChatListController {
                     .child("No matching chats"),
             );
         } else {
-            let mut scroll = div().flex_1().flex().flex_col().overflow_hidden();
+            let mut scroll = div().id("chat_list_scroll").flex_1().flex().flex_col().overflow_y_scroll();
 
             for chat in chats {
                 let chat_jid = chat.jid.clone();

@@ -1,4 +1,4 @@
-use gpui::{div, px, rgb, Div, ParentElement, Styled};
+use gpui::{div, px, rgb, Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled};
 use crate::db::repository::{ChatRecord, MessageRecord};
 use crate::theme::ThemeColors;
 use crate::ui::chat_item::extract_initials;
@@ -102,10 +102,11 @@ pub fn render_message_thread(
                 // Message Scrollback
                 .child({
                     let mut msg_list = div()
+                        .id("message_thread_scroll")
                         .flex_1()
                         .flex()
                         .flex_col()
-                        .overflow_hidden()
+                        .overflow_y_scroll()
                         .py_3();
 
                     if messages.is_empty() {

@@ -25,14 +25,20 @@ pub(crate) struct WacliMessagesData {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub(crate) struct WacliMessageDto {
+    #[serde(alias = "ChatJID", alias = "chat_jid", alias = "ChatJid")]
     pub(crate) chat_jid: String,
+    #[serde(alias = "SenderJID", alias = "sender_jid", alias = "SenderJid")]
     pub(crate) sender_jid: Option<String>,
+    #[serde(alias = "MsgID", alias = "msg_id", alias = "MsgId")]
     pub(crate) msg_id: String,
+    #[serde(alias = "Timestamp", alias = "timestamp")]
     pub(crate) timestamp: Option<String>,
+    #[serde(alias = "FromMe", alias = "from_me")]
     pub(crate) from_me: bool,
+    #[serde(alias = "Text", alias = "text")]
     pub(crate) text: Option<String>,
+    #[serde(alias = "DisplayText", alias = "display_text")]
     pub(crate) display_text: Option<String>,
 }
 
@@ -239,5 +245,18 @@ mod tests {
         assert_eq!(chats.len(), 1);
         assert_eq!(chats[0].name.as_deref(), Some("Alice"));
         assert_eq!(chats[0].pinned, Some(true));
+    }
+
+    #[core::prelude::v1::test]
+    fn test_parse_wacli_message_json() {
+        let json = r#"{"success":true,"data":{"fts":true,"messages":[{"ChatJID":"5521995551360@s.whatsapp.net","ChatName":"Amor Da Minha Vida","MsgID":"AC91A8FFAE453064862A1CA888C91224","SenderJID":"5521968887691@s.whatsapp.net","SenderName":"@realfakenerd","Timestamp":"2026-10-16T18:52:06Z","FromMe":true,"Text":"Hello world","DisplayText":"Hello world"}]},"error":null}"#;
+        let resp: WacliResponse<WacliMessagesData> = serde_json::from_str(json).unwrap();
+        assert!(resp.success);
+        let msgs = resp.data.unwrap().messages.unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].chat_jid, "5521995551360@s.whatsapp.net");
+        assert_eq!(msgs[0].msg_id, "AC91A8FFAE453064862A1CA888C91224");
+        assert_eq!(msgs[0].text.as_deref(), Some("Hello world"));
+        assert!(msgs[0].from_me);
     }
 }

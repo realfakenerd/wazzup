@@ -1,5 +1,8 @@
 use std::sync::Arc;
-use gpui::{div, px, rgb, Context, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Window};
+use gpui::{
+    div, px, rgb, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, ParentElement, Render, Styled, Window,
+};
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
 use crate::ipc::protocol::ConnectionState;
 use crate::ipc::client::WhatsAppClient;
@@ -16,6 +19,7 @@ pub struct MainWindow {
     pub desktop: DesktopSettings,
     pub client: Option<Arc<dyn WhatsAppClient>>,
     pub chat_list: ChatListController,
+    pub focus_handle: Option<FocusHandle>,
 }
 
 impl MainWindow {
@@ -27,6 +31,7 @@ impl MainWindow {
             desktop: DesktopSettings::new(),
             client: None,
             chat_list: ChatListController::new(),
+            focus_handle: None,
         }
     }
 
@@ -38,6 +43,7 @@ impl MainWindow {
             desktop: DesktopSettings::new(),
             client: None,
             chat_list: ChatListController::new(),
+            focus_handle: None,
         }
     }
 
@@ -49,12 +55,22 @@ impl MainWindow {
             desktop: DesktopSettings::new(),
             client: Some(client),
             chat_list: ChatListController::new(),
+            focus_handle: None,
         }
     }
 
     pub fn select_chat(&mut self, jid: &str) {
         self.state.select_chat(Some(jid.to_string()));
         self.chat_list.state.active_chat_jid = Some(jid.to_string());
+
+        // Instant local render from ChatStore if not already loaded in memory
+        if !self.state.messages_by_chat.contains_key(jid) {
+            if let Ok(msgs) = self.state.store.get_messages(jid, 1000) {
+                if !msgs.is_empty() {
+                    self.state.messages_by_chat.insert(jid.to_string(), msgs);
+                }
+            }
+        }
     }
 
     pub fn select_chat_async(&mut self, jid: &str, cx: &mut Context<Self>) {
@@ -63,8 +79,11 @@ impl MainWindow {
         if let Some(client) = self.client.clone() {
             let jid_string = jid.to_string();
             cx.spawn(async move |this, cx| {
-                if let Ok(msgs) = client.fetch_messages(&jid_string, 50).await {
+                if let Ok(msgs) = client.fetch_messages(&jid_string, 1000).await {
                     let _ = this.update(cx, |window, cx| {
+                        for msg in &msgs {
+                            let _ = window.state.store.insert_message(msg);
+                        }
                         window.state.messages_by_chat.insert(jid_string, msgs);
                         cx.notify();
                     });
@@ -169,7 +188,12 @@ impl Default for MainWindow {
 }
 
 impl Render for MainWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let focus_handle = self.focus_handle.get_or_insert_with(|| cx.focus_handle()).clone();
+        if !focus_handle.is_focused(window) && !focus_handle.contains_focused(window, cx) {
+            focus_handle.focus(window);
+        }
+
         let active_jid = self.state.active_chat_jid.as_deref();
         let filtered_chats = self.state.filtered_chats();
         let active_chat = self
@@ -182,11 +206,18 @@ impl Render for MainWindow {
         let has_active_chat = active_chat.is_some();
 
         let mut root = div()
+            .track_focus(&focus_handle)
+            .key_context("MainWindow")
             .flex()
             .flex_col()
             .size_full()
             .bg(ThemeColors::base())
             .text_color(ThemeColors::text_primary())
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, _| {
+                if let Some(ref fh) = this.focus_handle {
+                    fh.focus(window);
+                }
+            }))
             .on_key_down(cx.listener(|this, event, _, cx| {
                 this.handle_key(event, cx);
             }))
