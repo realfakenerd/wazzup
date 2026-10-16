@@ -20,9 +20,11 @@ tempfile = "3.17"
 
 [profile.dev]
 debug = 0
+incremental = false
 
 [profile.test]
 debug = 0
+incremental = false
 
 [patch.crates-io]
 xattr = { path = "patches/xattr" }

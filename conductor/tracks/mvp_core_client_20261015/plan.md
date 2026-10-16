@@ -66,14 +66,14 @@
 
 ## Phase 6: Desktop Integration & Final Polish
 
-- [ ] Task: Native Desktop Notifications (TDD)
-  - [ ] Write unit tests for notification formatting and suppression when window is focused (Red)
-  - [ ] Implement notify-rust integration with desktop notification routing (Green)
-- [ ] Task: Keyboard Shortcuts & Privacy Mode
-  - [ ] Implement Ctrl+K quick search palette, Ctrl+N new chat
-  - [ ] Implement privacy mode blur toggle (Ctrl+Shift+P)
-  - [ ] Add settings toggle for optional Vim modal navigation
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Native Desktop Notifications (TDD)
+  - [x] Write unit tests for notification formatting and suppression when window is focused (Red)
+  - [x] Implement notify-rust integration with desktop notification routing (Green)
+- [x] Task: Keyboard Shortcuts & Privacy Mode
+  - [x] Implement Ctrl+K quick search palette, Ctrl+N new chat
+  - [x] Implement privacy mode blur toggle (Ctrl+Shift+P)
+  - [x] Add settings toggle for optional Vim modal navigation
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 
 

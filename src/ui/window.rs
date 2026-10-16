@@ -1,4 +1,5 @@
 use gpui::{div, px, rgb, Context, IntoElement, ParentElement, Render, Styled, Window};
+use crate::desktop::shortcuts::{DesktopSettings, VimMode};
 use crate::ipc::protocol::ConnectionState;
 use crate::state::AppState;
 use crate::theme::ThemeColors;
@@ -10,6 +11,7 @@ pub struct MainWindow {
     pub title: String,
     pub state: AppState,
     pub composer: ComposerState,
+    pub desktop: DesktopSettings,
 }
 
 impl MainWindow {
@@ -18,6 +20,7 @@ impl MainWindow {
             title: "Wazzup".to_string(),
             state: AppState::new(),
             composer: ComposerState::new(),
+            desktop: DesktopSettings::new(),
         }
     }
 
@@ -26,6 +29,7 @@ impl MainWindow {
             title: "Wazzup".to_string(),
             state,
             composer: ComposerState::new(),
+            desktop: DesktopSettings::new(),
         }
     }
 
@@ -74,7 +78,7 @@ impl Render for MainWindow {
         let active_messages = self.state.active_messages();
         let has_active_chat = active_chat.is_some();
 
-        div()
+        let mut root = div()
             .flex()
             .flex_col()
             .size_full()
@@ -114,7 +118,35 @@ impl Render for MainWindow {
                                     .text_size(px(11.0))
                                     .text_color(ThemeColors::text_muted())
                                     .child(format!("• {}", self.status_label())),
-                            ),
+                            )
+                            .child(if self.desktop.privacy_mode {
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .rounded_md()
+                                    .bg(rgb(0x7f1d1d))
+                                    .text_size(px(10.0))
+                                    .text_color(rgb(0xfecaca))
+                                    .child("🔒 Privacy")
+                            } else {
+                                div()
+                            })
+                            .child(if self.desktop.vim_mode_enabled {
+                                let label = match self.desktop.vim_mode {
+                                    VimMode::Normal => "VIM: NORMAL",
+                                    VimMode::Insert => "VIM: INSERT",
+                                };
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .rounded_md()
+                                    .bg(rgb(ThemeColors::SURFACE))
+                                    .text_size(px(10.0))
+                                    .text_color(ThemeColors::emerald())
+                                    .child(label)
+                            } else {
+                                div()
+                            }),
                     )
                     .child(
                         div()
@@ -136,11 +168,15 @@ impl Render for MainWindow {
                         active_jid,
                         &self.state.search_query,
                         |jid| {
-                            self.state
-                                .messages_by_chat
-                                .get(jid)
-                                .and_then(|msgs| msgs.last())
-                                .map(|m| m.body.as_str())
+                            if self.desktop.privacy_mode {
+                                Some("••••••••••••")
+                            } else {
+                                self.state
+                                    .messages_by_chat
+                                    .get(jid)
+                                    .and_then(|msgs| msgs.last())
+                                    .map(|m| m.body.as_str())
+                            }
                         },
                     ))
                     // Right Column: Message Thread & Composer
@@ -153,7 +189,44 @@ impl Render for MainWindow {
                             .child(render_message_thread(active_chat, active_messages))
                             .child(render_composer(&self.composer, has_active_chat)),
                     ),
-            )
+            );
+
+        // Search Palette Modal Overlay
+        if self.desktop.search_palette_open {
+            root = root.child(
+                div()
+                    .absolute()
+                    .top_12()
+                    .left_1_2()
+                    .w(px(480.0))
+                    .p_3()
+                    .rounded_xl()
+                    .bg(ThemeColors::mantle())
+                    .border_1()
+                    .border_color(ThemeColors::emerald())
+                    .shadow_lg()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_size(px(14.0))
+                                    .text_color(ThemeColors::text_primary())
+                                    .child("🔍 Search conversations:"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(ThemeColors::text_muted())
+                                    .child("(Esc to close)"),
+                            ),
+                    ),
+            );
+        }
+
+        root
     }
 }
 
@@ -167,6 +240,8 @@ mod tests {
         let window = MainWindow::new();
         assert_eq!(window.title, "Wazzup");
         assert_eq!(window.state.connection_state, ConnectionState::Disconnected);
+        assert!(!window.desktop.privacy_mode);
+        assert!(!window.desktop.search_palette_open);
     }
 
     #[core::prelude::v1::test]
@@ -186,5 +261,19 @@ mod tests {
             window.state.active_chat_jid.as_deref(),
             Some("alice@s.whatsapp.net")
         );
+    }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_with_privacy_mode() {
+        let mut window = MainWindow::new();
+        window.desktop.toggle_privacy();
+        assert!(window.desktop.privacy_mode);
+    }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_with_search_palette() {
+        let mut window = MainWindow::new();
+        window.desktop.toggle_search_palette();
+        assert!(window.desktop.search_palette_open);
     }
 }
