@@ -54,15 +54,15 @@
 
 ## Phase 5: Rich Media Support & Audio Playback
 
-- [ ] Task: Image & Sticker Thumbnail Renderer (TDD)
-  - [ ] Write unit tests for image dimensions and caching helper (Red)
-  - [ ] Implement image decoding via image crate and rendering in GPUI view (Green)
-  - [ ] Add overlay modal for full-size inspection and zoom
-- [ ] Task: Audio Player Engine (TDD)
-  - [ ] Write unit tests for Symphonia audio decoder and Rodio player wrapper (Red)
-  - [ ] Implement non-blocking audio playback with playback progress reporting (Green)
-  - [ ] Implement GPUI AudioPlayerView with play/pause button and seekbar
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Image & Sticker Thumbnail Renderer (TDD)
+  - [x] Write unit tests for image dimensions and caching helper (Red)
+  - [x] Implement image decoding via image crate and rendering in GPUI view (Green)
+  - [x] Add overlay modal for full-size inspection and zoom
+- [x] Task: Audio Player Engine (TDD)
+  - [x] Write unit tests for Symphonia audio decoder and Rodio player wrapper (Red)
+  - [x] Implement non-blocking audio playback with playback progress reporting (Green)
+  - [x] Implement GPUI AudioPlayerView with play/pause button and seekbar
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 6: Desktop Integration & Final Polish
 

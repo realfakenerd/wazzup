@@ -1,6 +1,6 @@
 use gpui::{div, px, rgb, Div, ParentElement, Styled};
 use crate::db::repository::MessageRecord;
-use crate::ipc::protocol::{MediaType, MessageStatus};
+use crate::ipc::protocol::{MediaPayload, MediaType, MessageStatus};
 use crate::theme::ThemeColors;
 use crate::ui::chat_item::format_timestamp;
 
@@ -12,6 +12,7 @@ pub struct MessageBubbleProps {
     pub from_me: bool,
     pub status: MessageStatus,
     pub media_info: Option<String>,
+    pub media: Option<MediaPayload>,
 }
 
 impl MessageBubbleProps {
@@ -37,6 +38,7 @@ impl MessageBubbleProps {
             from_me: record.from_me,
             status: record.status.clone(),
             media_info,
+            media: record.media.clone(),
         }
     }
 
@@ -80,8 +82,44 @@ pub fn render_message_bubble(props: &MessageBubbleProps) -> Div {
         .bg(bubble_bg)
         .border_color(rgb(ThemeColors::BORDER));
 
-    // Media attachment preview header if present
-    if let Some(ref media) = props.media_info {
+    // Media attachment preview header / component if present
+    if let Some(ref media) = props.media {
+        match media.media_type {
+            MediaType::Image | MediaType::Sticker => {
+                bubble_content = bubble_content.child(
+                    div().pb_2().child(crate::media::image::render_image_preview(
+                        media.file_path.as_deref(),
+                        media.file_name.as_deref(),
+                        None,
+                    )),
+                );
+            }
+            MediaType::Audio => {
+                bubble_content = bubble_content.child(
+                    div().pb_2().child(crate::media::audio::render_audio_player(
+                        &crate::media::audio::AudioPlayerState::with_duration(
+                            media.file_path.as_deref(),
+                            30,
+                        ),
+                    )),
+                );
+            }
+            _ => {
+                if let Some(ref info) = props.media_info {
+                    bubble_content = bubble_content.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .pb_1()
+                            .text_size(px(12.0))
+                            .text_color(rgb(0x25d366))
+                            .child(info.clone()),
+                    );
+                }
+            }
+        }
+    } else if let Some(ref info) = props.media_info {
         bubble_content = bubble_content.child(
             div()
                 .flex()
@@ -90,7 +128,7 @@ pub fn render_message_bubble(props: &MessageBubbleProps) -> Div {
                 .pb_1()
                 .text_size(px(12.0))
                 .text_color(rgb(0x25d366))
-                .child(media.clone()),
+                .child(info.clone()),
         );
     }
 
@@ -147,6 +185,7 @@ mod tests {
             from_me: true,
             status,
             media_info: None,
+            media: None,
         };
 
         assert_eq!(make_props(MessageStatus::Pending).status_tick_str(), "🕒");
@@ -182,5 +221,33 @@ mod tests {
         assert!(props.from_me);
         assert_eq!(props.status, MessageStatus::Read);
         assert_eq!(props.media_info.as_deref(), Some("📄 Document • agenda.pdf"));
+        assert!(props.media.is_some());
+
+        // Test rendering with document
+        let _div = render_message_bubble(&props);
+
+        // Test rendering with image
+        let mut img_record = record.clone();
+        img_record.media = Some(MediaPayload {
+            media_type: MediaType::Image,
+            mimetype: "image/png".into(),
+            file_path: Some("/tmp/sample.png".into()),
+            file_name: Some("sample.png".into()),
+            file_size: Some(2048),
+        });
+        let img_props = MessageBubbleProps::from_record(&img_record);
+        let _div_img = render_message_bubble(&img_props);
+
+        // Test rendering with audio
+        let mut audio_record = record.clone();
+        audio_record.media = Some(MediaPayload {
+            media_type: MediaType::Audio,
+            mimetype: "audio/ogg".into(),
+            file_path: Some("/tmp/voice.ogg".into()),
+            file_name: Some("voice.ogg".into()),
+            file_size: Some(4096),
+        });
+        let audio_props = MessageBubbleProps::from_record(&audio_record);
+        let _div_audio = render_message_bubble(&audio_props);
     }
 }
