@@ -1,6 +1,6 @@
 use gpui::{
-    div, px, rgb, Context, Div, FocusHandle, InteractiveElement, MouseButton, ParentElement,
-    StatefulInteractiveElement, Styled,
+    div, px, rgb, uniform_list, Context, Div, FocusHandle, InteractiveElement, MouseButton,
+    ParentElement, Styled,
 };
 use crate::db::repository::ChatRecord;
 use crate::theme::ThemeColors;
@@ -156,6 +156,26 @@ impl ChatListController {
         }
     }
 
+    pub fn build_chat_item_props<'a>(
+        chats: &[&'a ChatRecord],
+        active_jid: Option<&str>,
+        privacy_mode: bool,
+        last_snippets: impl Fn(&str) -> Option<&'a str>,
+    ) -> Vec<ChatItemProps> {
+        chats
+            .iter()
+            .map(|chat| {
+                let is_selected = active_jid.map(|j| j == chat.jid).unwrap_or(false);
+                let snippet = if privacy_mode {
+                    Some("••••••••••••")
+                } else {
+                    last_snippets(&chat.jid)
+                };
+                ChatItemProps::from_record(chat, snippet, is_selected)
+            })
+            .collect()
+    }
+
     pub fn render_sidebar<'a, V: 'static>(
         &self,
         chats: &[&'a ChatRecord],
@@ -238,27 +258,35 @@ impl ChatListController {
                     .child("No matching chats"),
             );
         } else {
-            let mut scroll = div().id("chat_list_scroll").flex_1().flex().flex_col().overflow_y_scroll();
+            let props_list = std::sync::Arc::new(Self::build_chat_item_props(
+                chats,
+                active_jid,
+                privacy_mode,
+                last_snippets,
+            ));
+            let props_for_list = props_list.clone();
 
-            for chat in chats {
-                let chat_jid = chat.jid.clone();
-                let is_selected = active_jid.map(|j| j == chat.jid).unwrap_or(false);
-                let snippet = if privacy_mode {
-                    Some("••••••••••••")
-                } else {
-                    last_snippets(&chat.jid)
-                };
-                let props = ChatItemProps::from_record(chat, snippet, is_selected);
-                let item = render_chat_item(&props).on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |view, _, _, cx| {
-                        on_select(view, &chat_jid, cx);
+            sidebar = sidebar.child(
+                uniform_list(
+                    "chat_list_uniform",
+                    props_list.len(),
+                    cx.processor(move |_this, range: std::ops::Range<usize>, _window, cx| {
+                        range
+                            .map(|ix| {
+                                let props = &props_for_list[ix];
+                                let chat_jid = props.jid.clone();
+                                render_chat_item(props).on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(move |view, _, _, cx| {
+                                        on_select(view, &chat_jid, cx);
+                                    }),
+                                )
+                            })
+                            .collect()
                     }),
-                );
-                scroll = scroll.child(item);
-            }
-
-            sidebar = sidebar.child(scroll);
+                )
+                .flex_1(),
+            );
         }
 
         sidebar
@@ -373,5 +401,34 @@ mod tests {
 
         let action_empty = state.handle_key("Escape", false, false, &chats);
         assert_eq!(action_empty, ChatListAction::None);
+    }
+
+    #[core::prelude::v1::test]
+    fn test_build_chat_item_props() {
+        let chats = create_test_chats();
+        let refs: Vec<&ChatRecord> = chats.iter().collect();
+
+        // Standard props without privacy mode
+        let props = ChatListController::build_chat_item_props(
+            &refs,
+            Some("alice@s.whatsapp.net"),
+            false,
+            |jid| if jid == "alice@s.whatsapp.net" { Some("Hey Alice") } else { None },
+        );
+        assert_eq!(props.len(), 3);
+        assert_eq!(props[0].jid, "alice@s.whatsapp.net");
+        assert!(props[0].is_selected);
+        assert_eq!(props[0].snippet, "Hey Alice");
+        assert!(!props[1].is_selected);
+
+        // Privacy mode masks snippet
+        let privacy_props = ChatListController::build_chat_item_props(
+            &refs,
+            None,
+            true,
+            |_| Some("Secret text"),
+        );
+        assert_eq!(privacy_props[0].snippet, "••••••••••••");
+        assert!(!privacy_props[0].is_selected);
     }
 }

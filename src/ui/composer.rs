@@ -1,6 +1,7 @@
-use gpui::{div, px, rgb, Div, InteractiveElement, ParentElement, Styled};
+use gpui::{div, px, rgb, Div, Entity, InteractiveElement, ParentElement, Styled};
 use crate::ipc::protocol::WacliCommand;
 use crate::theme::ThemeColors;
+use crate::ui::text_input::TextInput;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComposerState {
@@ -44,12 +45,16 @@ impl ComposerState {
     }
 }
 
-pub fn render_composer(state: &ComposerState, has_active_chat: bool) -> Div {
+pub fn render_composer(
+    state: &ComposerState,
+    has_active_chat: bool,
+    text_input: Option<&Entity<TextInput>>,
+) -> Div {
     if !has_active_chat {
         return div();
     }
 
-    let is_send_enabled = !state.text.trim().is_empty() && !state.is_sending;
+    let is_send_enabled = (!state.text.trim().is_empty() || text_input.is_some()) && !state.is_sending;
 
     div()
         .flex()
@@ -87,7 +92,9 @@ pub fn render_composer(state: &ComposerState, has_active_chat: bool) -> Div {
                 .bg(rgb(ThemeColors::SURFACE0))
                 .border_1()
                 .border_color(rgb(ThemeColors::BORDER))
-                .child(
+                .child(if let Some(input) = text_input {
+                    div().flex_1().child(input.clone())
+                } else {
                     div()
                         .text_size(px(14.0))
                         .text_color(if state.text.is_empty() {
@@ -99,8 +106,8 @@ pub fn render_composer(state: &ComposerState, has_active_chat: bool) -> Div {
                             "Type a message (Enter to send)...".to_string()
                         } else {
                             state.text.clone()
-                        }),
-                ),
+                        })
+                }),
         )
         // Send Button
         .child(

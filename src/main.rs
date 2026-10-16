@@ -18,6 +18,7 @@ fn main() {
 
     Application::new().run(move |cx: &mut App| {
         wazzup::ui::bind_wazzup_keys(cx);
+        wazzup::ui::bind_text_input_keys(cx);
 
         let bounds = Bounds::centered(None, size(px(1000.0), px(700.0)), cx);
         let app_state = state.clone();

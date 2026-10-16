@@ -19,3 +19,7 @@
 ---
 - [x] **Track: Lazy Background Chat History Backfill and Retrieval on Chat Selection**
   *Link: [./tracks/feat_lazy_history_retrieval_20261016/index.md](./tracks/feat_lazy_history_retrieval_20261016/index.md)*
+
+---
+- [x] **Track: Interactive Native TextInput Entity and Virtualized UniformList Rendering**
+  *Link: [./tracks/feat_text_input_and_virtualized_lists_20261016/index.md](./tracks/feat_text_input_and_virtualized_lists_20261016/index.md)*

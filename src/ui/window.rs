@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use gpui::{
-    actions, div, px, rgb, App, Context, FocusHandle, InteractiveElement, IntoElement,
-    KeyBinding, KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window,
+    actions, div, px, rgb, App, AppContext, Context, Entity, FocusHandle, InteractiveElement,
+    IntoElement, KeyBinding, KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window,
 };
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
 use crate::ipc::client::WhatsAppClient;
@@ -12,6 +12,7 @@ use crate::theme::ThemeColors;
 use crate::ui::chat_list_controller::{ChatListAction, ChatListController};
 use crate::ui::composer::{render_composer, ComposerState};
 use crate::ui::message_thread::render_message_thread;
+use crate::ui::text_input::TextInput;
 
 actions!(
     wazzup,
@@ -56,6 +57,7 @@ pub struct MainWindow {
     pub title: String,
     pub state: AppState,
     pub composer: ComposerState,
+    pub composer_input: Option<Entity<TextInput>>,
     pub desktop: DesktopSettings,
     pub client: Option<Arc<dyn WhatsAppClient>>,
     pub chat_list: ChatListController,
@@ -69,6 +71,7 @@ impl MainWindow {
             title: "Wazzup".to_string(),
             state: AppState::new(),
             composer: ComposerState::new(),
+            composer_input: None,
             desktop: DesktopSettings::new(),
             client: None,
             chat_list: ChatListController::new(),
@@ -82,6 +85,7 @@ impl MainWindow {
             title: "Wazzup".to_string(),
             state,
             composer: ComposerState::new(),
+            composer_input: None,
             desktop: DesktopSettings::new(),
             client: None,
             chat_list: ChatListController::new(),
@@ -95,6 +99,7 @@ impl MainWindow {
             title: "Wazzup".to_string(),
             state,
             composer: ComposerState::new(),
+            composer_input: None,
             desktop: DesktopSettings::new(),
             client: Some(client),
             chat_list: ChatListController::new(),
@@ -250,7 +255,15 @@ impl MainWindow {
     }
 
     pub fn send_active_composer_message(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref input) = self.composer_input {
+            let text = input.read(cx).content.to_string();
+            self.composer.set_text(&text);
+        }
+
         if let Some(cmd) = self.send_active_composer_command() {
+            if let Some(ref input) = self.composer_input {
+                input.update(cx, |input, _| input.clear());
+            }
             if let Some(client) = self.client.clone() {
                 cx.spawn(async move |_this, _cx| {
                     let _ = client.send_command(cmd).await;
@@ -285,6 +298,13 @@ impl Render for MainWindow {
             .cloned();
         let active_messages = self.state.active_messages().to_vec();
         let has_active_chat = active_chat.is_some();
+
+        let composer_input = self
+            .composer_input
+            .get_or_insert_with(|| {
+                cx.new(|cx| TextInput::new(cx, "Type a message (Enter to send)..."))
+            })
+            .clone();
 
         let mut root = div()
             .track_focus(&focus_handle)
@@ -327,12 +347,18 @@ impl Render for MainWindow {
                 this.desktop.toggle_vim_mode();
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &VimEnterInsert, _, cx| {
+            .on_action(cx.listener(|this, _: &VimEnterInsert, window, cx| {
                 this.desktop.vim_mode = VimMode::Insert;
+                if let Some(ref input) = this.composer_input {
+                    input.read(cx).focus_handle.focus(window);
+                }
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &VimEnterNormal, _, cx| {
+            .on_action(cx.listener(|this, _: &VimEnterNormal, window, cx| {
                 this.desktop.vim_mode = VimMode::Normal;
+                if let Some(ref fh) = this.focus_handle {
+                    fh.focus(window);
+                }
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &SendMessage, _, cx| {
@@ -449,7 +475,7 @@ impl Render for MainWindow {
                             .flex_col()
                             .h_full()
                             .child(render_message_thread(active_chat.as_ref(), &active_messages))
-                            .child(render_composer(&self.composer, has_active_chat)),
+                            .child(render_composer(&self.composer, has_active_chat, Some(&composer_input))),
                     ),
             );
 
