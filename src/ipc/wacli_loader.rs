@@ -60,8 +60,11 @@ impl WacliLoader {
         if !state.chats.is_empty() {
             state.connection_state = ConnectionState::Connected;
             // Select first chat (usually pinned or most recent)
-            if let Some(first) = state.chats.first() {
-                state.select_chat(Some(first.jid.clone()));
+            if let Some(first_jid) = state.chats.first().map(|c| c.jid.clone()) {
+                state.select_chat(Some(first_jid.clone()));
+                if let Ok(msgs) = Self::fetch_chat_messages(&first_jid, 50) {
+                    state.messages_by_chat.insert(first_jid, msgs);
+                }
             }
         }
 
@@ -102,6 +105,51 @@ impl WacliLoader {
             .args(["messages", "list", "--json", "--limit", "100"])
             .output()
             .map_err(|e| format!("Failed to execute wacli messages list: {}", e))?;
+
+        if !output.status.success() {
+            return Err("wacli returned non-zero exit code".to_string());
+        }
+
+        let resp: WacliResponse<WacliMessagesData> = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("JSON parse error: {}", e))?;
+
+        let mut messages = Vec::new();
+        if let Some(data) = resp.data {
+            if let Some(raw_msgs) = data.messages {
+                for m in raw_msgs {
+                    let body = m.text.or(m.display_text).unwrap_or_default();
+                    let sender_jid = m.sender_jid.unwrap_or_else(|| m.chat_jid.clone());
+                    let ts_sec = m.timestamp
+                        .as_deref()
+                        .and_then(parse_iso_seconds)
+                        .unwrap_or(0);
+
+                    messages.push(MessageRecord {
+                        id: m.msg_id,
+                        chat_jid: m.chat_jid,
+                        sender_jid,
+                        timestamp: ts_sec,
+                        from_me: m.from_me,
+                        body,
+                        status: if m.from_me { MessageStatus::Read } else { MessageStatus::Delivered },
+                        media: None,
+                    });
+                }
+            }
+        }
+
+        // Sort chronologically ascending
+        messages.sort_by_key(|m| m.timestamp);
+
+        Ok(messages)
+    }
+
+    pub fn fetch_chat_messages(chat_jid: &str, limit: u32) -> Result<Vec<MessageRecord>, String> {
+        let limit_str = limit.to_string();
+        let output = Command::new("wacli")
+            .args(["messages", "list", "--chat", chat_jid, "--json", "--limit", &limit_str])
+            .output()
+            .map_err(|e| format!("Failed to execute wacli messages list for chat: {}", e))?;
 
         if !output.status.success() {
             return Err("wacli returned non-zero exit code".to_string());
