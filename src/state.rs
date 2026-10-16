@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::db::chat_store::ChatStore;
 use crate::db::repository::{ChatRecord, MessageRecord};
 use crate::ipc::protocol::{ChatEvent, ConnectionState, MessageEvent, WacliEvent};
 
@@ -13,6 +14,7 @@ pub struct AppState {
     pub messages_by_chat: HashMap<String, Vec<MessageRecord>>,
     pub search_query: String,
     pub is_searching: bool,
+    pub store: ChatStore,
 }
 
 impl Default for AppState {
@@ -23,16 +25,23 @@ impl Default for AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        let store = ChatStore::new_in_memory().expect("in-memory store should initialize");
+        Self::with_store(store)
+    }
+
+    pub fn with_store(store: ChatStore) -> Self {
+        let chats = store.list_chats();
         Self {
             connection_state: ConnectionState::Disconnected,
             phone: None,
             push_name: None,
             qr_code: None,
             active_chat_jid: None,
-            chats: Vec::new(),
+            chats,
             messages_by_chat: HashMap::new(),
             search_query: String::new(),
             is_searching: false,
+            store,
         }
     }
 
@@ -41,6 +50,7 @@ impl AppState {
             if let Some(chat) = self.chats.iter_mut().find(|c| c.jid == *selected_jid) {
                 chat.unread_count = 0;
             }
+            let _ = self.store.clear_unread(selected_jid);
         }
         self.active_chat_jid = jid;
     }
@@ -102,7 +112,7 @@ impl AppState {
     }
 
     fn apply_chat_event(&mut self, chat: &ChatEvent) {
-        if let Some(existing) = self.chats.iter_mut().find(|c| c.jid == chat.jid) {
+        let chat_record = if let Some(existing) = self.chats.iter_mut().find(|c| c.jid == chat.jid) {
             if let Some(ref name) = chat.name {
                 existing.name = Some(name.clone());
             }
@@ -116,15 +126,19 @@ impl AppState {
                 );
             }
             existing.pinned = chat.pinned;
+            existing.clone()
         } else {
-            self.chats.push(ChatRecord {
+            let record = ChatRecord {
                 jid: chat.jid.clone(),
                 name: chat.name.clone(),
                 unread_count: chat.unread_count,
                 last_message_timestamp: chat.last_message_timestamp,
                 pinned: chat.pinned,
-            });
-        }
+            };
+            self.chats.push(record.clone());
+            record
+        };
+        let _ = self.store.upsert_chat(&chat_record);
         self.sort_chats();
     }
 
@@ -142,10 +156,13 @@ impl AppState {
 
         let messages = self.messages_by_chat.entry(msg.chat_jid.clone()).or_default();
         if let Some(pos) = messages.iter().position(|m| m.id == record.id) {
-            messages[pos] = record;
+            messages[pos] = record.clone();
         } else {
-            messages.push(record);
+            messages.push(record.clone());
         }
+
+        // Write-through to SQLite L2 store
+        let _ = self.store.insert_message(&record);
 
         // Update chat unread & timestamp
         let is_active = self.active_chat_jid.as_deref() == Some(&msg.chat_jid);
@@ -282,5 +299,28 @@ mod tests {
         state.set_search_query("");
         let results = state.filtered_chats();
         assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_app_state_with_store_offline_restore() {
+        let store = ChatStore::new_in_memory().unwrap();
+        let chat = ChatRecord {
+            jid: "charlie@s.whatsapp.net".to_string(),
+            name: Some("Charlie".to_string()),
+            unread_count: 3,
+            last_message_timestamp: Some(500),
+            pinned: true,
+        };
+        store.upsert_chat(&chat).unwrap();
+
+        let mut state = AppState::with_store(store);
+        assert_eq!(state.chats.len(), 1);
+        assert_eq!(state.chats[0].jid, "charlie@s.whatsapp.net");
+        assert_eq!(state.chats[0].unread_count, 3);
+
+        // Selecting chat clears unread count in both memory and store
+        state.select_chat(Some("charlie@s.whatsapp.net".to_string()));
+        assert_eq!(state.chats[0].unread_count, 0);
+        assert_eq!(state.store.get_chat("charlie@s.whatsapp.net").unwrap().unread_count, 0);
     }
 }

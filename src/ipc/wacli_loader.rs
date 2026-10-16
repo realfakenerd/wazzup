@@ -41,16 +41,34 @@ pub struct WacliLoader;
 impl WacliLoader {
     /// Loads chats and messages from local wacli installation into AppState
     pub fn load_initial_state() -> AppState {
-        let mut state = AppState::new();
+        let db_dir = std::env::var("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(|h| std::path::PathBuf::from(h).join(".local/share/wazzup"))
+                    .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/wazzup"))
+            });
+        let db_path = db_dir.join("wazzup.db");
+        let store = crate::db::ChatStore::open(&db_path)
+            .unwrap_or_else(|_| crate::db::ChatStore::new_in_memory().unwrap());
+
+        let mut state = AppState::with_store(store);
 
         // 1. Fetch chats
         if let Ok(chats) = Self::fetch_chats() {
+            for chat in &chats {
+                let _ = state.store.upsert_chat(chat);
+            }
             state.chats = chats;
+        } else {
+            // Offline fallback: restore cached chats from SQLite store
+            state.chats = state.store.list_chats();
         }
 
         // 2. Fetch recent messages
         if let Ok(messages) = Self::fetch_recent_messages() {
             for msg in messages {
+                let _ = state.store.insert_message(&msg);
                 let list = state.messages_by_chat.entry(msg.chat_jid.clone()).or_default();
                 list.push(msg);
             }
@@ -62,7 +80,7 @@ impl WacliLoader {
             // Select first chat (usually pinned or most recent)
             if let Some(first_jid) = state.chats.first().map(|c| c.jid.clone()) {
                 state.select_chat(Some(first_jid.clone()));
-                if let Ok(msgs) = Self::fetch_chat_messages(&first_jid, 50) {
+                if let Ok(msgs) = state.store.get_messages(&first_jid, 50) {
                     state.messages_by_chat.insert(first_jid, msgs);
                 }
             }
