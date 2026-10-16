@@ -12,6 +12,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub enum ClientRequest {
     FetchChats,
     FetchChatMessages { chat_jid: String, limit: u32 },
+    SyncChatHistory { chat_jid: String, backfill_count: u32 },
     SendCommand(WacliCommand),
 }
 
@@ -36,6 +37,11 @@ pub trait WhatsAppClient: Send + Sync {
         &'a self,
         chat_jid: &'a str,
         limit: u32,
+    ) -> BoxFuture<'a, Result<Vec<MessageRecord>, String>>;
+    fn sync_chat_history<'a>(
+        &'a self,
+        chat_jid: &'a str,
+        backfill_count: u32,
     ) -> BoxFuture<'a, Result<Vec<MessageRecord>, String>>;
     fn send_command(
         &self,
@@ -97,6 +103,14 @@ impl WhatsAppClient for MockWhatsAppClient {
             let truncated = list.into_iter().take(limit as usize).collect();
             Ok(truncated)
         })
+    }
+
+    fn sync_chat_history<'a>(
+        &'a self,
+        chat_jid: &'a str,
+        _backfill_count: u32,
+    ) -> BoxFuture<'a, Result<Vec<MessageRecord>, String>> {
+        self.fetch_messages(chat_jid, 1000)
     }
 
     fn send_command(
@@ -167,6 +181,32 @@ impl WhatsAppClient for ChannelWhatsAppClient {
         })
     }
 
+    fn sync_chat_history<'a>(
+        &'a self,
+        chat_jid: &'a str,
+        backfill_count: u32,
+    ) -> BoxFuture<'a, Result<Vec<MessageRecord>, String>> {
+        Box::pin(async move {
+            let (tx, rx) = oneshot::channel();
+            self.sender
+                .send(ClientMessage {
+                    request: ClientRequest::SyncChatHistory {
+                        chat_jid: chat_jid.to_string(),
+                        backfill_count,
+                    },
+                    respond_to: tx,
+                })
+                .await
+                .map_err(|e| format!("Actor channel send error: {}", e))?;
+
+            match rx.await {
+                Ok(ClientResponse::Messages { messages, .. }) => Ok(messages),
+                Ok(ClientResponse::Error(err)) => Err(err),
+                _ => Err("Invalid response type for SyncChatHistory".to_string()),
+            }
+        })
+    }
+
     fn send_command(
         &self,
         cmd: WacliCommand,
@@ -229,6 +269,10 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].body, "Hi Alice");
 
+        // sync_chat_history succeeds
+        let sync_msgs = client.sync_chat_history("123@s.whatsapp.net", 50).await.unwrap();
+        assert_eq!(sync_msgs.len(), 1);
+
         // Send command succeeds
         assert!(client.send_command(WacliCommand::SyncChats).await.is_ok());
     }
@@ -257,6 +301,12 @@ mod tests {
                             messages: vec![],
                         });
                     }
+                    ClientRequest::SyncChatHistory { chat_jid, .. } => {
+                        let _ = msg.respond_to.send(ClientResponse::Messages {
+                            chat_jid,
+                            messages: vec![],
+                        });
+                    }
                     ClientRequest::SendCommand(_) => {
                         let _ = msg.respond_to.send(ClientResponse::CommandAck);
                     }
@@ -270,6 +320,9 @@ mod tests {
 
         let messages = client.fetch_messages("test@s.whatsapp.net", 10).await.unwrap();
         assert!(messages.is_empty());
+
+        let sync_msgs = client.sync_chat_history("test@s.whatsapp.net", 50).await.unwrap();
+        assert!(sync_msgs.is_empty());
 
         let cmd_res = client.send_command(WacliCommand::GetStatus).await;
         assert!(cmd_res.is_ok());

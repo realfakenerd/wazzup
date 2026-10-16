@@ -1,16 +1,38 @@
 use std::sync::Arc;
 use gpui::{
-    div, px, rgb, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, ParentElement, Render, Styled, Window,
+    actions, div, px, rgb, App, Context, FocusHandle, InteractiveElement, IntoElement,
+    KeyBinding, KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window,
 };
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
-use crate::ipc::protocol::ConnectionState;
 use crate::ipc::client::WhatsAppClient;
+use crate::ipc::protocol::ConnectionState;
+use crate::ipc::sync_tracker::InFlightSyncTracker;
 use crate::state::AppState;
 use crate::theme::ThemeColors;
 use crate::ui::chat_list_controller::{ChatListAction, ChatListController};
 use crate::ui::composer::{render_composer, ComposerState};
 use crate::ui::message_thread::render_message_thread;
+
+actions!(
+    wazzup,
+    [
+        NextChat,
+        PrevChat,
+        QuickSearch,
+        ClearSearch,
+        TogglePrivacy,
+    ]
+);
+
+pub fn bind_wazzup_keys(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("up", PrevChat, Some("MainWindow")),
+        KeyBinding::new("down", NextChat, Some("MainWindow")),
+        KeyBinding::new("ctrl-k", QuickSearch, Some("MainWindow")),
+        KeyBinding::new("escape", ClearSearch, Some("MainWindow")),
+        KeyBinding::new("ctrl-shift-p", TogglePrivacy, Some("MainWindow")),
+    ]);
+}
 
 pub struct MainWindow {
     pub title: String,
@@ -20,6 +42,7 @@ pub struct MainWindow {
     pub client: Option<Arc<dyn WhatsAppClient>>,
     pub chat_list: ChatListController,
     pub focus_handle: Option<FocusHandle>,
+    pub sync_tracker: InFlightSyncTracker,
 }
 
 impl MainWindow {
@@ -32,6 +55,7 @@ impl MainWindow {
             client: None,
             chat_list: ChatListController::new(),
             focus_handle: None,
+            sync_tracker: InFlightSyncTracker::new(),
         }
     }
 
@@ -44,6 +68,7 @@ impl MainWindow {
             client: None,
             chat_list: ChatListController::new(),
             focus_handle: None,
+            sync_tracker: InFlightSyncTracker::new(),
         }
     }
 
@@ -56,6 +81,7 @@ impl MainWindow {
             client: Some(client),
             chat_list: ChatListController::new(),
             focus_handle: None,
+            sync_tracker: InFlightSyncTracker::new(),
         }
     }
 
@@ -76,20 +102,27 @@ impl MainWindow {
     pub fn select_chat_async(&mut self, jid: &str, cx: &mut Context<Self>) {
         self.select_chat(jid);
 
+        if !self.sync_tracker.acquire(jid) {
+            // Already syncing this chat; skip redundant background spawn
+            return;
+        }
+
         if let Some(client) = self.client.clone() {
             let jid_string = jid.to_string();
+            let tracker = self.sync_tracker.clone();
             cx.spawn(async move |this, cx| {
-                if let Ok(msgs) = client.fetch_messages(&jid_string, 1000).await {
+                if let Ok(msgs) = client.sync_chat_history(&jid_string, 50).await {
                     let _ = this.update(cx, |window, cx| {
-                        for msg in &msgs {
-                            let _ = window.state.store.insert_message(msg);
-                        }
-                        window.state.messages_by_chat.insert(jid_string, msgs);
+                        let _ = window.state.store.insert_messages(&msgs);
+                        window.state.messages_by_chat.insert(jid_string.clone(), msgs);
                         cx.notify();
                     });
                 }
+                tracker.release(&jid_string);
             })
             .detach();
+        } else {
+            self.sync_tracker.release(jid);
         }
     }
 
@@ -220,6 +253,27 @@ impl Render for MainWindow {
             }))
             .on_key_down(cx.listener(|this, event, _, cx| {
                 this.handle_key(event, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PrevChat, _, cx| {
+                this.navigate_chat_async(-1, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NextChat, _, cx| {
+                this.navigate_chat_async(1, cx);
+            }))
+            .on_action(cx.listener(|this, _: &QuickSearch, _, cx| {
+                this.state.is_searching = true;
+                this.chat_list.state.is_searching = true;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ClearSearch, _, cx| {
+                this.state.search_query.clear();
+                this.state.is_searching = false;
+                this.chat_list.state.clear_search();
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &TogglePrivacy, _, cx| {
+                this.desktop.toggle_privacy();
+                cx.notify();
             }))
             // Top App Bar
             .child(
@@ -471,5 +525,36 @@ mod tests {
         // Calling select_chat is instant, never blocks
         window.select_chat("chat1@s.whatsapp.net");
         assert_eq!(window.state.active_chat_jid.as_deref(), Some("chat1@s.whatsapp.net"));
+    }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_select_chat_instant_store_and_in_flight_dedup() {
+        let store = crate::db::ChatStore::new_in_memory().unwrap();
+        let jid = "chat_fast@s.whatsapp.net";
+        let msg = crate::db::repository::MessageRecord {
+            id: "m_fast".into(),
+            chat_jid: jid.into(),
+            sender_jid: jid.into(),
+            timestamp: 1000,
+            from_me: false,
+            body: "Instant cached msg".into(),
+            status: crate::ipc::protocol::MessageStatus::Read,
+            media: None,
+        };
+        store.insert_message(&msg).unwrap();
+
+        let state = AppState::with_store(store);
+        let mut window = MainWindow::with_state(state);
+
+        // Instant store read on select_chat
+        window.select_chat(jid);
+        assert_eq!(window.state.active_messages().len(), 1);
+        assert_eq!(window.state.active_messages()[0].body, "Instant cached msg");
+
+        // In-flight tracker deduplication
+        assert!(window.sync_tracker.acquire(jid));
+        assert!(!window.sync_tracker.acquire(jid)); // Rejected duplicate
+        window.sync_tracker.release(jid);
+        assert!(window.sync_tracker.acquire(jid)); // Re-acquired after release
     }
 }

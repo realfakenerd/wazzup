@@ -17,5 +17,5 @@
   *Link: [./tracks/improve_chat_list_controller_20261016/index.md](./tracks/improve_chat_list_controller_20261016/index.md)*
 
 ---
-- [ ] **Track: Lazy Background Chat History Backfill and Retrieval on Chat Selection**
+- [x] **Track: Lazy Background Chat History Backfill and Retrieval on Chat Selection**
   *Link: [./tracks/feat_lazy_history_retrieval_20261016/index.md](./tracks/feat_lazy_history_retrieval_20261016/index.md)*

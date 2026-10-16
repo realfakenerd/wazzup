@@ -85,6 +85,18 @@ async fn handle_request(binary: &str, request: ClientRequest) -> ClientResponse 
                 Err(e) => ClientResponse::Error(e),
             }
         }
+        ClientRequest::SyncChatHistory {
+            chat_jid,
+            backfill_count,
+        } => {
+            match sync_chat_history_async(binary, &chat_jid, backfill_count).await {
+                Ok(messages) => ClientResponse::Messages {
+                    chat_jid,
+                    messages,
+                },
+                Err(e) => ClientResponse::Error(e),
+            }
+        }
         ClientRequest::SendCommand(_cmd) => {
             // Commands are handled through actor ack
             ClientResponse::CommandAck
@@ -121,6 +133,22 @@ async fn fetch_chats_async(binary: &str) -> Result<Vec<ChatRecord>, String> {
     }
 
     Ok(chats)
+}
+
+async fn sync_chat_history_async(
+    binary: &str,
+    chat_jid: &str,
+    backfill_count: u32,
+) -> Result<Vec<MessageRecord>, String> {
+    if backfill_count > 0 {
+        let count_str = backfill_count.to_string();
+        let _ = Command::new(binary)
+            .args(["history", "backfill", "--chat", chat_jid, "--count", &count_str])
+            .output()
+            .await;
+    }
+
+    fetch_chat_messages_async(binary, chat_jid, 1000).await
 }
 
 async fn fetch_chat_messages_async(
@@ -255,5 +283,38 @@ mod tests {
         }).await;
 
         assert!(send_res.is_err(), "Send should fail when actor receiver is dropped");
+    }
+
+    #[tokio::test]
+    async fn test_actor_sync_chat_history_dispatch() {
+        let (tx, rx) = mpsc::channel(16);
+        let actor = WacliActor::with_binary(rx, "true");
+        let handle = tokio::spawn(actor.run());
+
+        let (resp_tx, resp_rx) = oneshot::channel();
+        tx.send(ClientMessage {
+            request: ClientRequest::SyncChatHistory {
+                chat_jid: "test@s.whatsapp.net".to_string(),
+                backfill_count: 0,
+            },
+            respond_to: resp_tx,
+        })
+        .await
+        .unwrap();
+
+        let response = resp_rx.await.unwrap();
+        // Since binary is "true", JSON output will be empty and trigger JSON parse error
+        match response {
+            ClientResponse::Error(msg) => {
+                assert!(msg.contains("JSON") || msg.contains("parse"));
+            }
+            ClientResponse::Messages { chat_jid, .. } => {
+                assert_eq!(chat_jid, "test@s.whatsapp.net");
+            }
+            _ => panic!("Unexpected response type: {:?}", response),
+        }
+
+        drop(tx);
+        let _ = handle.await;
     }
 }

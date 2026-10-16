@@ -169,6 +169,13 @@ impl ChatStore {
         Ok(())
     }
 
+    pub fn insert_messages(&self, msgs: &[MessageRecord]) -> Result<()> {
+        for msg in msgs {
+            self.insert_message(msg)?;
+        }
+        Ok(())
+    }
+
     pub fn get_messages(&self, chat_jid: &str, limit: u32) -> Result<Vec<MessageRecord>> {
         {
             let cache = self.cache.lock().unwrap();
@@ -297,5 +304,52 @@ mod tests {
         let results = store.search_messages("password", 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, "m1");
+    }
+
+    #[test]
+    fn test_chat_store_batch_insert_messages_deduplication() {
+        let store = ChatStore::new_in_memory().unwrap();
+        let jid = "test@s.whatsapp.net";
+        let msgs = vec![
+            MessageRecord {
+                id: "m1".into(),
+                chat_jid: jid.into(),
+                sender_jid: jid.into(),
+                timestamp: 100,
+                from_me: false,
+                body: "First message".into(),
+                status: MessageStatus::Delivered,
+                media: None,
+            },
+            MessageRecord {
+                id: "m2".into(),
+                chat_jid: jid.into(),
+                sender_jid: jid.into(),
+                timestamp: 200,
+                from_me: false,
+                body: "Second message".into(),
+                status: MessageStatus::Delivered,
+                media: None,
+            },
+            // Duplicate of m1 with same ID
+            MessageRecord {
+                id: "m1".into(),
+                chat_jid: jid.into(),
+                sender_jid: jid.into(),
+                timestamp: 100,
+                from_me: false,
+                body: "First message duplicate".into(),
+                status: MessageStatus::Delivered,
+                media: None,
+            },
+        ];
+
+        store.insert_messages(&msgs).unwrap();
+
+        let loaded = store.get_messages(jid, 10).unwrap();
+        // m1 should only appear once
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, "m1");
+        assert_eq!(loaded[1].id, "m2");
     }
 }

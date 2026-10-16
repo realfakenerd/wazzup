@@ -51,6 +51,14 @@ impl AppState {
                 chat.unread_count = 0;
             }
             let _ = self.store.clear_unread(selected_jid);
+
+            if !self.messages_by_chat.contains_key(selected_jid) {
+                if let Ok(msgs) = self.store.get_messages(selected_jid, 1000) {
+                    if !msgs.is_empty() {
+                        self.messages_by_chat.insert(selected_jid.clone(), msgs);
+                    }
+                }
+            }
         }
         self.active_chat_jid = jid;
     }
@@ -427,5 +435,31 @@ mod tests {
             media: None,
         });
         assert_eq!(state.chats[0].unread_count, 0);
+    }
+
+    #[test]
+    fn test_select_chat_populates_messages_from_store() {
+        let store = ChatStore::new_in_memory().unwrap();
+        let jid = "user@s.whatsapp.net";
+        let msg = MessageRecord {
+            id: "msg_store_1".into(),
+            chat_jid: jid.into(),
+            sender_jid: jid.into(),
+            timestamp: 12345,
+            from_me: false,
+            body: "Saved in store".into(),
+            status: MessageStatus::Read,
+            media: None,
+        };
+        store.insert_message(&msg).unwrap();
+
+        let mut state = AppState::with_store(store);
+        assert!(!state.messages_by_chat.contains_key(jid));
+
+        // When selected, messages_by_chat is immediately populated from store
+        state.select_chat(Some(jid.into()));
+        assert!(state.messages_by_chat.contains_key(jid));
+        assert_eq!(state.messages_by_chat.get(jid).unwrap().len(), 1);
+        assert_eq!(state.messages_by_chat.get(jid).unwrap()[0].body, "Saved in store");
     }
 }
