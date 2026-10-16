@@ -5,7 +5,7 @@ use gpui::{
 };
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
 use crate::ipc::client::WhatsAppClient;
-use crate::ipc::protocol::ConnectionState;
+use crate::ipc::protocol::{ConnectionState, WacliCommand};
 use crate::ipc::sync_tracker::InFlightSyncTracker;
 use crate::state::AppState;
 use crate::theme::ThemeColors;
@@ -21,16 +21,34 @@ actions!(
         QuickSearch,
         ClearSearch,
         TogglePrivacy,
+        ToggleVimMode,
+        VimEnterInsert,
+        VimEnterNormal,
+        SendMessage,
     ]
 );
 
 pub fn bind_wazzup_keys(cx: &mut App) {
     cx.bind_keys([
+        // Standard Navigation & Actions
         KeyBinding::new("up", PrevChat, Some("MainWindow")),
         KeyBinding::new("down", NextChat, Some("MainWindow")),
         KeyBinding::new("ctrl-k", QuickSearch, Some("MainWindow")),
         KeyBinding::new("escape", ClearSearch, Some("MainWindow")),
         KeyBinding::new("ctrl-shift-p", TogglePrivacy, Some("MainWindow")),
+        KeyBinding::new("ctrl-shift-v", ToggleVimMode, Some("MainWindow")),
+
+        // Vim Normal Mode Navigation (j, k, /, i)
+        KeyBinding::new("k", PrevChat, Some("VimNormal")),
+        KeyBinding::new("j", NextChat, Some("VimNormal")),
+        KeyBinding::new("/", QuickSearch, Some("VimNormal")),
+        KeyBinding::new("i", VimEnterInsert, Some("VimNormal")),
+
+        // Vim Insert Mode Return to Normal
+        KeyBinding::new("escape", VimEnterNormal, Some("VimInsert")),
+
+        // Composer Action
+        KeyBinding::new("enter", SendMessage, Some("Composer")),
     ]);
 }
 
@@ -212,6 +230,36 @@ impl MainWindow {
             ConnectionState::Disconnected => "Offline".to_string(),
         }
     }
+
+    pub fn current_key_context(&self) -> &'static str {
+        if self.desktop.vim_mode_enabled {
+            match self.desktop.vim_mode {
+                VimMode::Normal => "MainWindow VimNormal",
+                VimMode::Insert => "MainWindow VimInsert Composer",
+            }
+        } else {
+            "MainWindow Composer"
+        }
+    }
+
+    pub fn send_active_composer_command(&mut self) -> Option<WacliCommand> {
+        let active_jid = self.state.active_chat_jid.as_ref()?;
+        let cmd = self.composer.create_send_command(active_jid)?;
+        self.composer.clear();
+        Some(cmd)
+    }
+
+    pub fn send_active_composer_message(&mut self, cx: &mut Context<Self>) {
+        if let Some(cmd) = self.send_active_composer_command() {
+            if let Some(client) = self.client.clone() {
+                cx.spawn(async move |_this, _cx| {
+                    let _ = client.send_command(cmd).await;
+                })
+                .detach();
+            }
+            cx.notify();
+        }
+    }
 }
 
 impl Default for MainWindow {
@@ -240,7 +288,7 @@ impl Render for MainWindow {
 
         let mut root = div()
             .track_focus(&focus_handle)
-            .key_context("MainWindow")
+            .key_context(self.current_key_context())
             .flex()
             .flex_col()
             .size_full()
@@ -274,6 +322,21 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &TogglePrivacy, _, cx| {
                 this.desktop.toggle_privacy();
                 cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ToggleVimMode, _, cx| {
+                this.desktop.toggle_vim_mode();
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &VimEnterInsert, _, cx| {
+                this.desktop.vim_mode = VimMode::Insert;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &VimEnterNormal, _, cx| {
+                this.desktop.vim_mode = VimMode::Normal;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &SendMessage, _, cx| {
+                this.send_active_composer_message(cx);
             }))
             // Top App Bar
             .child(
@@ -557,4 +620,56 @@ mod tests {
         window.sync_tracker.release(jid);
         assert!(window.sync_tracker.acquire(jid)); // Re-acquired after release
     }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_key_context_transitions() {
+        let mut window = MainWindow::new();
+        assert_eq!(window.current_key_context(), "MainWindow Composer");
+
+        // Enable vim mode -> starts in Normal mode
+        window.desktop.toggle_vim_mode();
+        assert!(window.desktop.vim_mode_enabled);
+        assert_eq!(window.desktop.vim_mode, VimMode::Normal);
+        assert_eq!(window.current_key_context(), "MainWindow VimNormal");
+
+        // Transition to Insert mode
+        window.desktop.vim_mode = VimMode::Insert;
+        assert_eq!(window.current_key_context(), "MainWindow VimInsert Composer");
+
+        // Transition back to Normal mode
+        window.desktop.vim_mode = VimMode::Normal;
+        assert_eq!(window.current_key_context(), "MainWindow VimNormal");
+
+        // Disable vim mode
+        window.desktop.toggle_vim_mode();
+        assert!(!window.desktop.vim_mode_enabled);
+        assert_eq!(window.current_key_context(), "MainWindow Composer");
+    }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_send_active_composer_command() {
+        let mut window = MainWindow::new();
+
+        // No active chat -> None
+        window.composer.set_text("Hello!");
+        assert!(window.send_active_composer_command().is_none());
+
+        // Active chat, empty text -> None
+        window.state.active_chat_jid = Some("alice@s.whatsapp.net".to_string());
+        window.composer.clear();
+        assert!(window.send_active_composer_command().is_none());
+
+        // Active chat with valid text -> Some(WacliCommand::SendText) and clears composer
+        window.composer.set_text("  Hi Alice!  ");
+        let cmd = window.send_active_composer_command();
+        assert_eq!(
+            cmd,
+            Some(WacliCommand::SendText {
+                to: "alice@s.whatsapp.net".to_string(),
+                text: "Hi Alice!".to_string(),
+            })
+        );
+        assert!(window.composer.text.is_empty());
+    }
 }
+
