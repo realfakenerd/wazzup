@@ -1,4 +1,4 @@
-use gpui::*;
+use gpui::{div, px, rgb, Context, IntoElement, ParentElement, Render, Styled, Window};
 use crate::theme::ThemeColors;
 
 pub struct MainWindow {
@@ -73,7 +73,7 @@ impl Render for MainWindow {
 mod tests {
     use super::*;
 
-    #[test]
+    #[core::prelude::v1::test]
     fn test_main_window_creation() {
         let window = MainWindow::new();
         assert_eq!(window.title, "Wazzup");

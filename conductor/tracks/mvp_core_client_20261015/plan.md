@@ -30,13 +30,13 @@
 
 ## Phase 3: GPUI Application Shell & State Models
 
-- [~] Task: GPUI Window & Theme Initialization
-  - [ ] Scaffolding GPUI App entrypoint with Omarchy/Zed Dark palette tokens
-  - [ ] Configure Wayland window options and titlebar
-- [ ] Task: App State & Reactive Store (TDD)
-  - [ ] Write unit tests for AppState model, active chat selection, and event listener dispatch (Red)
-  - [ ] Implement GPUI Model<AppState> bridging tokio background event channel into GPUI UI loop (Green)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: GPUI Window & Theme Initialization
+  - [x] Scaffolding GPUI App entrypoint with Omarchy/Zed Dark palette tokens
+  - [x] Configure Wayland window options and titlebar
+- [x] Task: App State & Reactive Store (TDD)
+  - [x] Write unit tests for AppState model, active chat selection, and event listener dispatch (Red)
+  - [x] Implement GPUI Model<AppState> bridging tokio background event channel into GPUI UI loop (Green)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: Chat List & Message Thread Views
 
