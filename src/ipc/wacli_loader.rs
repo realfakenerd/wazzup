@@ -5,35 +5,35 @@ use crate::ipc::protocol::{ConnectionState, MessageStatus};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
-struct WacliResponse<T> {
+pub(crate) struct WacliResponse<T> {
     #[allow(dead_code)]
-    success: bool,
-    data: Option<T>,
+    pub(crate) success: bool,
+    pub(crate) data: Option<T>,
 }
 
 #[derive(Debug, Deserialize)]
-struct WacliChatDto {
-    jid: String,
-    name: Option<String>,
-    pinned: Option<bool>,
-    unread_count: Option<u32>,
+pub(crate) struct WacliChatDto {
+    pub(crate) jid: String,
+    pub(crate) name: Option<String>,
+    pub(crate) pinned: Option<bool>,
+    pub(crate) unread_count: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
-struct WacliMessagesData {
-    messages: Option<Vec<WacliMessageDto>>,
+pub(crate) struct WacliMessagesData {
+    pub(crate) messages: Option<Vec<WacliMessageDto>>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct WacliMessageDto {
-    chat_jid: String,
-    sender_jid: Option<String>,
-    msg_id: String,
-    timestamp: Option<String>,
-    from_me: bool,
-    text: Option<String>,
-    display_text: Option<String>,
+pub(crate) struct WacliMessageDto {
+    pub(crate) chat_jid: String,
+    pub(crate) sender_jid: Option<String>,
+    pub(crate) msg_id: String,
+    pub(crate) timestamp: Option<String>,
+    pub(crate) from_me: bool,
+    pub(crate) text: Option<String>,
+    pub(crate) display_text: Option<String>,
 }
 
 pub struct WacliLoader;
@@ -190,7 +190,7 @@ impl WacliLoader {
     }
 }
 
-fn parse_iso_seconds(iso: &str) -> Option<i64> {
+pub(crate) fn parse_iso_seconds(iso: &str) -> Option<i64> {
     // Basic parser for "YYYY-MM-DDTHH:MM:SSZ" without external chrono dependency
     if iso.len() >= 19 {
         let h: i64 = iso[11..13].parse().ok()?;

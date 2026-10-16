@@ -5,7 +5,7 @@
   *Link: [./tracks/mvp_core_client_20261015/index.md](./tracks/mvp_core_client_20261015/index.md)*
 
 ---
-- [ ] **Track: Non-Blocking Async WhatsApp Client Service Seam**
+- [x] **Track: Non-Blocking Async WhatsApp Client Service Seam**
   *Link: [./tracks/improve_async_client_service_20261016/index.md](./tracks/improve_async_client_service_20261016/index.md)*
 
 ---

@@ -1,7 +1,8 @@
+use std::sync::Arc;
 use gpui::{div, px, rgb, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window};
 use crate::desktop::shortcuts::{DesktopSettings, ShortcutAction, VimMode};
 use crate::ipc::protocol::ConnectionState;
-use crate::ipc::WacliLoader;
+use crate::ipc::client::WhatsAppClient;
 use crate::state::AppState;
 use crate::theme::ThemeColors;
 use crate::ui::chat_item::{render_chat_item, ChatItemProps};
@@ -13,6 +14,7 @@ pub struct MainWindow {
     pub state: AppState,
     pub composer: ComposerState,
     pub desktop: DesktopSettings,
+    pub client: Option<Arc<dyn WhatsAppClient>>,
 }
 
 impl MainWindow {
@@ -22,6 +24,7 @@ impl MainWindow {
             state: AppState::new(),
             composer: ComposerState::new(),
             desktop: DesktopSettings::new(),
+            client: None,
         }
     }
 
@@ -31,21 +34,38 @@ impl MainWindow {
             state,
             composer: ComposerState::new(),
             desktop: DesktopSettings::new(),
+            client: None,
+        }
+    }
+
+    pub fn with_client(state: AppState, client: Arc<dyn WhatsAppClient>) -> Self {
+        Self {
+            title: "Wazzup".to_string(),
+            state,
+            composer: ComposerState::new(),
+            desktop: DesktopSettings::new(),
+            client: Some(client),
         }
     }
 
     pub fn select_chat(&mut self, jid: &str) {
         self.state.select_chat(Some(jid.to_string()));
-        if self
-            .state
-            .messages_by_chat
-            .get(jid)
-            .map(|m| m.is_empty())
-            .unwrap_or(true)
-        {
-            if let Ok(msgs) = WacliLoader::fetch_chat_messages(jid, 50) {
-                self.state.messages_by_chat.insert(jid.to_string(), msgs);
-            }
+    }
+
+    pub fn select_chat_async(&mut self, jid: &str, cx: &mut Context<Self>) {
+        self.select_chat(jid);
+
+        if let Some(client) = self.client.clone() {
+            let jid_string = jid.to_string();
+            cx.spawn(async move |this, cx| {
+                if let Ok(msgs) = client.fetch_messages(&jid_string, 50).await {
+                    let _ = this.update(cx, |window, cx| {
+                        window.state.messages_by_chat.insert(jid_string, msgs);
+                        cx.notify();
+                    });
+                }
+            })
+            .detach();
         }
     }
 
@@ -74,6 +94,31 @@ impl MainWindow {
         }
     }
 
+    pub fn navigate_chat_async(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let filtered = self.state.filtered_chats();
+        if filtered.is_empty() {
+            return;
+        }
+
+        let current_idx = self
+            .state
+            .active_chat_jid
+            .as_deref()
+            .and_then(|jid| filtered.iter().position(|c| c.jid == jid))
+            .unwrap_or(0);
+
+        let new_idx = if delta > 0 {
+            (current_idx + delta as usize).min(filtered.len() - 1)
+        } else {
+            current_idx.saturating_sub((-delta) as usize)
+        };
+
+        if let Some(target_chat) = filtered.get(new_idx) {
+            let jid = target_chat.jid.clone();
+            self.select_chat_async(&jid, cx);
+        }
+    }
+
     pub fn handle_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = &event.keystroke.key;
         let ctrl = event.keystroke.modifiers.control;
@@ -91,10 +136,10 @@ impl MainWindow {
                     self.state.is_searching = false;
                 }
                 ShortcutAction::VimNextChat => {
-                    self.navigate_chat(1);
+                    self.navigate_chat_async(1, cx);
                 }
                 ShortcutAction::VimPrevChat => {
-                    self.navigate_chat(-1);
+                    self.navigate_chat_async(-1, cx);
                 }
                 _ => {}
             }
@@ -118,13 +163,13 @@ impl MainWindow {
         }
 
         if key == "ArrowDown" || key == "down" {
-            self.navigate_chat(1);
+            self.navigate_chat_async(1, cx);
             cx.notify();
             return;
         }
 
         if key == "ArrowUp" || key == "up" {
-            self.navigate_chat(-1);
+            self.navigate_chat_async(-1, cx);
             cx.notify();
             return;
         }
@@ -361,7 +406,7 @@ impl Render for MainWindow {
                                         let props = ChatItemProps::from_record(chat, snippet, is_selected);
                                         let item = render_chat_item(&props)
                                             .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
-                                                this.select_chat(&chat_jid);
+                                                this.select_chat_async(&chat_jid, cx);
                                                 cx.notify();
                                             }));
                                         scroll = scroll.child(item);
@@ -496,6 +541,26 @@ mod tests {
 
         // Navigate backward
         window.navigate_chat(-1);
+        assert_eq!(window.state.active_chat_jid.as_deref(), Some("chat1@s.whatsapp.net"));
+    }
+
+    #[core::prelude::v1::test]
+    fn test_main_window_with_client_and_select_chat() {
+        let mock_client = std::sync::Arc::new(crate::ipc::client::MockWhatsAppClient::new());
+        let mut state = AppState::new();
+        state.chats.push(ChatRecord {
+            jid: "chat1@s.whatsapp.net".into(),
+            name: Some("Chat 1".into()),
+            unread_count: 0,
+            last_message_timestamp: Some(200),
+            pinned: false,
+        });
+
+        let mut window = MainWindow::with_client(state, mock_client);
+        assert!(window.client.is_some());
+
+        // Calling select_chat is instant, never blocks
+        window.select_chat("chat1@s.whatsapp.net");
         assert_eq!(window.state.active_chat_jid.as_deref(), Some("chat1@s.whatsapp.net"));
     }
 }
