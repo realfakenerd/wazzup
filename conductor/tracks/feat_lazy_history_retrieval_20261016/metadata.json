@@ -1,0 +1,8 @@
+{
+  "track_id": "feat_lazy_history_retrieval_20261016",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-10-16T17:46:40.396Z",
+  "updated_at": "2026-10-16T17:46:40.396Z",
+  "description": "Lazy Background Chat History Backfill and Retrieval on Chat Selection"
+}
